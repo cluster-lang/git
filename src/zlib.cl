@@ -1,8 +1,8 @@
 // ==============================================================================
 // Module:      Compression & Decompression Engine (zlib.cl)
 // Project:     Cluster Git (Distributed Version Control System)
-// Author:      Zaid Alamgir (ZK Company)
-// License:     MIT License
+// Author:      mohammadzaid/(cluster) <zkalamgir@proton.me>
+// License:     Cluster Community // License:     MIT License Fair-Source License (CCFL-1.0)
 // Description: RFC 1950 (ZLIB) and RFC 1951 (DEFLATE) streaming compressor.
 // ==============================================================================
 

@@ -1,8 +1,12 @@
-# Cluster Git
+# Cluster Git: High-Performance Distributed Version Control System
 
-**A High-Performance Distributed Version Control System Written in Cluster**
+> [!IMPORTANT]
+> **Project Status: Active Development**  
+> This project is currently under active development. Developers, researchers, and AI agents are invited to explore the codebase, test native builds, and contribute! See [Contribution Guidelines & Zero-Dependency Rule](#-contribution-guidelines--zero-dependency-rule) below.
 
-Architected by **Zaid Alamgir** (ZK Company)
+**Author:** mohammadzaid/(cluster) <zkalamgir@proton.me>  
+**Organization:** [cluster-lang](https://github.com/cluster-lang)  
+**License:** Cluster Community & Fair-Source License (CCFL v1.0 / MIT-Conditional)  
 
 ---
 
@@ -12,7 +16,7 @@ Cluster Git is a standalone distributed version control system designed for spee
 
 * **Binary Compatibility:** Full two-way interoperability with official `/usr/bin/git`. Objects, trees, commits, branches, and the `DIRC v2` index can be inspected and manipulated interchangeably.
 * **Bare-Metal Speed:** Up to **2.38x faster** than official C Git on repository status queries.
-* **Clean Architecture:** Fully implemented in **1,510 lines** across 7 modular files, eliminating the 400,000+ lines of historical C ceremony.
+* **Clean Architecture:** Fully implemented in pure Cluster across 7 modular files, eliminating the 400,000+ lines of historical C ceremony.
 
 ---
 
@@ -29,61 +33,81 @@ Benchmarked on Linux x86-64 across 50 iterations against official `/usr/bin/git`
 
 ---
 
-## 🛠️ Module Architecture
+## 🛠️ Architecture & Modules
 
 ```
 git/
 ├── bin/
 │   └── cluster-git     # Standalone 167 KB native executable (LLVM -O3)
 ├── src/
-│   ├── sha1.cl         # RFC 3174 SHA-1 Cryptographic Engine
-│   ├── zlib.cl         # RFC 1950/1951 ZLIB Deflate Compression & Inflation
-│   ├── object.cl       # Content-Addressable Object Store (Blob, Tree, Commit, Tag)
-│   ├── index.cl        # DIRC v2 Binary Index Serialization & Staging Operations
-│   ├── repository.cl   # Repository Layout, HEAD Tracking & Branch Management
-│   ├── diff.cl         # Longest Common Subsequence (LCS) Unified Diff Engine
-│   └── main.cl         # CLI Driver & Porcelain Command Router
+│   ├── sha1.cl         # RFC 3174 SHA-1 Hashing Engine
+│   ├── zlib.cl         # RFC 1950 Zlib Compression & Decompression
+│   ├── object.cl       # Git Object Database (blobs, trees, commits, tags)
+│   ├── index.cl        # DIRC v2 Binary Index Parser & Serializer
+│   ├── repository.cl   # Repository Discovery & Ref Resolution (.git/refs)
+│   ├── diff.cl         # Myers Diff Engine
+│   └── main.cl         # Full Porcelain CLI Driver (init, status, add, commit, log, diff, branch, checkout)
 └── tests/
-    └── test_git.cl     # Comprehensive 10-Phase Automated Verification Suite
+    └── test_git.cl     # Comprehensive 10-Phase Automated Test Suite
 ```
 
 ---
 
-## 🚀 Quickstart & Usage
+## 🚀 Supported Commands
 
 ```bash
-# Initialize a repository
-cluster-git init my-project
-cd my-project
+# Initialize a new repository
+cluster-git init
 
-# Check status
+# Check working tree status (2.38x faster than C Git)
 cluster-git status
 
-# Stage files
-cluster-git add .
+# Stage files into the index
+cluster-git add src/main.cl
 
-# Commit changes
-cluster-git commit -m "Initial commit"
+# Create a cryptographic commit
+cluster-git commit -m "feat: initial commit"
 
-# Inspect commit DAG
-cluster-git log --oneline
+# View commit history
+cluster-git log
 
-# Inspect line-by-line diff
+# Inspect repository diffs
 cluster-git diff
+
+# Branching & checking out
+cluster-git branch feature
+cluster-git checkout feature
 ```
 
 ---
 
-## 🧪 Testing
+## 🤝 Contribution Guidelines & Zero-Dependency Rule
 
-Run the automated test suite:
+The fundamental mission of **Cluster** is to eliminate external dependency bloat and provide a self-contained, high-performance ecosystem.
+
+### Core Rules for Contributions:
+1. **100% Pure Cluster (`.cl`):** All new features, plumbing commands, and porcelain tools must be written purely in Cluster.
+2. **Zero Foreign Dependencies:** Absolutely no external C/C++ third-party library dependencies, no external header packages, and no platform-locked runtimes.
+3. **Compiler-Only Execution:** Every program must compile and run using **only the Cluster compiler (`cluster`)** with zero external tooling requirements.
+4. **Universal Device Portability:** Code must compile natively across all devices and architectures (x86-64, ARM64, embedded) with consistent deterministic behavior.
+
+---
+
+## 🧪 Automated Test Suite
+
+Run the full 10-phase automated test suite:
 ```bash
 cl run tests/test_git.cl
 ```
 
 ---
 
-## 📜 License
+## 📜 License & Commercial Terms
 
-Released under the **MIT License**.
-Copyright © 2026 Zaid Alamgir (ZK Company). All rights reserved.
+This software is released under the **Cluster Community & Fair-Source License (CCFL v1.0 / MIT-Conditional)**:
+
+- **100% Free for Independent & Research Use:**
+  - Individual software developers, students, educators, academic researchers, non-profits, and scientific research groups have full rights to inspect, run, modify, compile, and contribute without any license fees.
+- **Commercial Enterprise License Required:**
+  - For-profit companies, commercial startups, corporations, and enterprise businesses utilizing Cluster Git in commercial products, SaaS services, proprietary closed-source systems, or revenue-generating operations are required to purchase a commercial license.
+  - Contact: **`zkalamgir@proton.me`** (`mohammadzaid/(cluster)`).

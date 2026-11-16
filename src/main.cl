@@ -1,8 +1,8 @@
 // ==============================================================================
 // Module:      Main CLI Porcelain & Plumbing Driver (main.cl)
 // Project:     Cluster Git (Distributed Version Control System)
-// Author:      Zaid Alamgir (ZK Company)
-// License:     MIT License
+// Author:      mohammadzaid/(cluster) <zkalamgir@proton.me>
+// License:     Cluster Community // License:     MIT License Fair-Source License (CCFL-1.0)
 // Description: Porcelain command router (init, status, add, commit, log, diff, branch, checkout).
 // ==============================================================================
 
@@ -479,7 +479,7 @@ fn cmd_diff(git_dir: string, repo_root: string) -> void:
 
 fn print_help():
     println("Cluster Git: Distributed Version Control System")
-    println("Author: Zaid Alamgir (ZK Company)")
+    println("Author: mohammadzaid/(cluster) <zkalamgir@proton.me>")
     println("Usage: cluster-git <command> [<args>]\n")
     println("Core Commands:")
     println("   init           Initialize a new Git repository")
@@ -508,7 +508,7 @@ fn main():
 
     if subcmd == "-v" or subcmd == "--version" or subcmd == "version":
         println("cluster-git version 1.0.0 (Cluster native LLVM -O3)")
-        println("Author: Zaid Alamgir (ZK Company)")
+        println("Author: mohammadzaid/(cluster) <zkalamgir@proton.me>")
         return
 
     if subcmd == "init":

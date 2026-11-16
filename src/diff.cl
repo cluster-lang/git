@@ -1,8 +1,8 @@
 // ==============================================================================
 // Module:      Unified Diff Engine (diff.cl)
 // Project:     Cluster Git (Distributed Version Control System)
-// Author:      Zaid Alamgir (ZK Company)
-// License:     MIT License
+// Author:      mohammadzaid/(cluster) <zkalamgir@proton.me>
+// License:     Cluster Community // License:     MIT License Fair-Source License (CCFL-1.0)
 // Description: Longest Common Subsequence (LCS) line diff with ANSI color formatting.
 // ==============================================================================
 
