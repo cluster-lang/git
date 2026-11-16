@@ -1,8 +1,18 @@
-// ============================================================================
-//  cluster-git: Compression Engine (src/zlib.cl)
-//  100% Pure Cluster Implementation of RFC 1950 (ZLIB) & RFC 1951 (DEFLATE)
-// ============================================================================
+// ==============================================================================
+// Module:      Compression & Decompression Engine (zlib.cl)
+// Project:     Cluster Git (Distributed Version Control System)
+// Author:      Zaid Alamgir (ZK Company)
+// License:     MIT License
+// Description: RFC 1950 (ZLIB) and RFC 1951 (DEFLATE) streaming compressor.
+// ==============================================================================
 
+// ------------------------------------------------------------------------------
+// Function: adler32
+// Syntax:   fn adler32(data: string) -> int
+// Purpose:  Computes RFC 1950 Adler-32 checksum over uncompressed bytes.
+// Params:   data - Input byte string
+// Returns:  32-bit unsigned Adler-32 integer checksum
+// ------------------------------------------------------------------------------
 fn adler32(data: string) -> int:
     s1 := 1
     s2 := 0
@@ -15,6 +25,13 @@ fn adler32(data: string) -> int:
         i = i + 1
     return ((s2 << 16) | s1) & 4294967295
 
+// ------------------------------------------------------------------------------
+// Function: zlib_compress
+// Syntax:   fn zlib_compress(data: string) -> string
+// Purpose:  Compresses input payload into RFC 1950 / RFC 1951 compliant zlib stream.
+// Params:   data - Raw uncompressed payload string
+// Returns:  ZLIB formatted binary byte stream
+// ------------------------------------------------------------------------------
 fn zlib_compress(data: string) -> string:
     dlen := len(data)
     // RFC 1950 Header: CMF=0x78 (deflate, 32k window), FLG=0x01 (no dict, level 0)
@@ -50,23 +67,30 @@ fn zlib_compress(data: string) -> string:
     out = out + chr((a >> 24) & 255) + chr((a >> 16) & 255) + chr((a >> 8) & 255) + chr(a & 255)
     return out
 
+// ------------------------------------------------------------------------------
+// Function: zlib_decompress
+// Syntax:   fn zlib_decompress(comp: string) -> string
+// Purpose:  Decompresses RFC 1950 / RFC 1951 ZLIB streams into original bytes.
+// Params:   comp - ZLIB compressed binary string
+// Returns:  Decompressed uncompressed string payload
+// ------------------------------------------------------------------------------
 fn zlib_decompress(comp: string) -> string:
     clen := len(comp)
     if clen < 6:
         return ""
 
-    // Check zlib header
+    // Verify RFC 1950 CMF byte
     cmf := byte_at(comp, 0)
     flg := byte_at(comp, 1)
     if cmf != 120:
         return ""
 
-    // Check if stored deflate block (BTYPE = 00)
+    // Inspect BTYPE (stored blocks vs Huffman)
     bhdr := byte_at(comp, 2)
     btype := (bhdr >> 1) & 3
 
     if btype == 0:
-        // Pure Cluster native stored block extraction
+        // Native stored block inflation
         out := ""
         pos := 2
         while pos + 4 < clen - 4:
@@ -74,7 +98,6 @@ fn zlib_decompress(comp: string) -> string:
             is_final := cur_hdr & 1
             cur_type := (cur_hdr >> 1) & 3
             if cur_type != 0:
-                // Not stored block
                 return ""
             l0 := byte_at(comp, pos + 1)
             l1 := byte_at(comp, pos + 2)
@@ -87,7 +110,7 @@ fn zlib_decompress(comp: string) -> string:
                 return out
         return out
 
-    // Fallback for compressed Huffman streams from external git repositories
+    // Fallback decompressor for dynamic Huffman streams
     tmp_in := "/tmp/cl_git_decomp_in"
     tmp_out := "/tmp/cl_git_decomp_out"
     file_write(tmp_in, comp)

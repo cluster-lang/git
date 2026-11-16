@@ -1,14 +1,32 @@
-// ============================================================================
-//  cluster-git: Cryptographic Hashing Engine (src/sha1.cl)
-//  100% Pure Cluster Implementation of RFC 3174 SHA-1 Specification
-// ============================================================================
+// ==============================================================================
+// Module:      Cryptographic Hashing Engine (sha1.cl)
+// Project:     Cluster Git (Distributed Version Control System)
+// Author:      Zaid Alamgir (ZK Company)
+// License:     MIT License
+// Description: RFC 3174 compliant SHA-1 hash function and hexadecimal encoder.
+// ==============================================================================
 
+// ------------------------------------------------------------------------------
+// Function: rol32
+// Syntax:   fn rol32(x: int, n: int) -> int
+// Purpose:  Performs a 32-bit circular left rotation by n bits.
+// Params:   x - The 32-bit integer word to rotate
+//           n - Number of bit positions to shift left (0-31)
+// Returns:  32-bit rotated integer result
+// ------------------------------------------------------------------------------
 fn rol32(x: int, n: int) -> int:
     mask := 4294967295
     left := (x << n) & mask
     right := (x >> (32 - n)) & mask
     return (left | right) & mask
 
+// ------------------------------------------------------------------------------
+// Function: hex_nibble
+// Syntax:   fn hex_nibble(n: int) -> string
+// Purpose:  Converts a 4-bit numeric value (0-15) to a single hex character.
+// Params:   n - Value between 0 and 15
+// Returns:  Single-character lowercase hex string ("0"-"f")
+// ------------------------------------------------------------------------------
 fn hex_nibble(n: int) -> string:
     v := n & 15
     if v == 0: return "0"
@@ -28,6 +46,13 @@ fn hex_nibble(n: int) -> string:
     if v == 14: return "e"
     return "f"
 
+// ------------------------------------------------------------------------------
+// Function: to_hex32
+// Syntax:   fn to_hex32(val: int) -> string
+// Purpose:  Converts a 32-bit unsigned integer into an 8-character hex string.
+// Params:   val - 32-bit integer word
+// Returns:  8-character lowercase hexadecimal string
+// ------------------------------------------------------------------------------
 fn to_hex32(val: int) -> string:
     v := val & 4294967295
     h := ""
@@ -38,6 +63,13 @@ fn to_hex32(val: int) -> string:
         shift = shift - 4
     return h
 
+// ------------------------------------------------------------------------------
+// Function: hex_char_val
+// Syntax:   fn hex_char_val(c: int) -> int
+// Purpose:  Converts an ASCII byte code of a hex digit to its integer value (0-15).
+// Params:   c - ASCII integer value of the character
+// Returns:  Integer from 0 to 15, or 0 if invalid
+// ------------------------------------------------------------------------------
 fn hex_char_val(c: int) -> int:
     if c >= 48 and c <= 57:
         return c - 48
@@ -47,6 +79,14 @@ fn hex_char_val(c: int) -> int:
         return c - 55
     return 0
 
+// ------------------------------------------------------------------------------
+// Function: str_compare
+// Syntax:   fn str_compare(s1: string, s2: string) -> int
+// Purpose:  Performs lexicographical byte comparison of two strings.
+// Params:   s1 - First string operand
+//           s2 - Second string operand
+// Returns:  -1 if s1 < s2, 0 if s1 == s2, 1 if s1 > s2
+// ------------------------------------------------------------------------------
 fn str_compare(s1: string, s2: string) -> int:
     l1 := len(s1)
     l2 := len(s2)
@@ -68,6 +108,13 @@ fn str_compare(s1: string, s2: string) -> int:
         return 1
     return 0
 
+// ------------------------------------------------------------------------------
+// Function: hex_to_raw_str
+// Syntax:   fn hex_to_raw_str(hex_str: string) -> string
+// Purpose:  Decodes a 40-character hex string into 20 raw binary bytes.
+// Params:   hex_str - 40-character hexadecimal string
+// Returns:  20-byte raw binary string
+// ------------------------------------------------------------------------------
 fn hex_to_raw_str(hex_str: string) -> string:
     res := ""
     hlen := len(hex_str)
@@ -82,6 +129,13 @@ fn hex_to_raw_str(hex_str: string) -> string:
         i = i + 2
     return res
 
+// ------------------------------------------------------------------------------
+// Function: raw_str_to_hex
+// Syntax:   fn raw_str_to_hex(raw_str: string) -> string
+// Purpose:  Encodes 20 raw binary bytes into a 40-character hex digest.
+// Params:   raw_str - Binary string containing raw bytes
+// Returns:  40-character lowercase hexadecimal string
+// ------------------------------------------------------------------------------
 fn raw_str_to_hex(raw_str: string) -> string:
     res := ""
     rlen := len(raw_str)
@@ -94,6 +148,13 @@ fn raw_str_to_hex(raw_str: string) -> string:
         i = i + 1
     return res
 
+// ------------------------------------------------------------------------------
+// Function: sha1
+// Syntax:   fn sha1(msg: string) -> string
+// Purpose:  Computes RFC 3174 compliant SHA-1 hash for arbitrary text or binary data.
+// Params:   msg - Input payload to hash
+// Returns:  40-character lowercase hex digest
+// ------------------------------------------------------------------------------
 fn sha1(msg: string) -> string:
     mask := 4294967295
     mlen := len(msg)
@@ -110,7 +171,7 @@ fn sha1(msg: string) -> string:
     while (len(bytes) + 8) % 64 != 0:
         bytes.push(0)
 
-    # 64-bit length big-endian
+    // 64-bit message length encoded as big-endian
     high_bits := (bit_len >> 32) & mask
     low_bits := bit_len & mask
 
@@ -124,6 +185,7 @@ fn sha1(msg: string) -> string:
     bytes.push((low_bits >> 8) & 255)
     bytes.push(low_bits & 255)
 
+    // RFC 3174 initial state constants
     h0 := 1732584193
     h1 := 4023233417
     h2 := 2562383102

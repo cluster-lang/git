@@ -1,7 +1,10 @@
-// ============================================================================
-//  cluster-git: Object Storage Engine (src/object.cl)
-//  Git Content-Addressable Object Database (Blob, Tree, Commit, Tag)
-// ============================================================================
+// ==============================================================================
+// Module:      Object Storage Engine (object.cl)
+// Project:     Cluster Git (Distributed Version Control System)
+// Author:      Zaid Alamgir (ZK Company)
+// License:     MIT License
+// Description: Content-addressable object store (blob, tree, commit, tag).
+// ==============================================================================
 
 model GitObject:
     obj_type: string
@@ -22,9 +25,25 @@ model CommitInfo:
     timestamp: int
     message: string
 
+// ------------------------------------------------------------------------------
+// Function: format_object_payload
+// Syntax:   fn format_object_payload(obj_type: string, content: string) -> string
+// Purpose:  Formats standard Git loose object wire envelope: "<type> <size>\0<content>"
+// Params:   obj_type - Object identifier ("blob", "tree", "commit", "tag")
+//           content  - Raw binary or text payload
+// Returns:  Serialized object header and payload
+// ------------------------------------------------------------------------------
 fn format_object_payload(obj_type: string, content: string) -> string:
     return obj_type + " " + len(content) + chr(0) + content
 
+// ------------------------------------------------------------------------------
+// Function: parse_object_payload
+// Syntax:   fn parse_object_payload(raw: string, hash: string) -> GitObject
+// Purpose:  Parses uncompressed Git loose object into a structured GitObject.
+// Params:   raw  - Uncompressed loose object payload
+//           hash - 40-character SHA-1 identifier
+// Returns:  Structured GitObject model
+// ------------------------------------------------------------------------------
 fn parse_object_payload(raw: string, hash: string) -> GitObject:
     rlen := len(raw)
     null_pos := -1
@@ -60,6 +79,15 @@ fn parse_object_payload(raw: string, hash: string) -> GitObject:
 
     return GitObject(obj_type, sz, content, hash)
 
+// ------------------------------------------------------------------------------
+// Function: write_git_object
+// Syntax:   fn write_git_object(git_dir: string, obj_type: string, content: string) -> string
+// Purpose:  Compresses and persists an object to .git/objects/xx/yyy...
+// Params:   git_dir  - Path to the .git directory
+//           obj_type - Type of object ("blob", "tree", "commit")
+//           content  - Object payload
+// Returns:  40-character SHA-1 hash of the created object
+// ------------------------------------------------------------------------------
 fn write_git_object(git_dir: string, obj_type: string, content: string) -> string:
     payload := format_object_payload(obj_type, content)
     h := sha1(payload)
@@ -75,9 +103,16 @@ fn write_git_object(git_dir: string, obj_type: string, content: string) -> strin
     file_write(obj_path, comp)
     return h
 
+// ------------------------------------------------------------------------------
+// Function: read_git_object
+// Syntax:   fn read_git_object(git_dir: string, hash: string) -> GitObject
+// Purpose:  Reads, decompresses, and parses an object by its SHA-1 hash or prefix.
+// Params:   git_dir - Path to the .git directory
+//           hash    - Full or partial SHA-1 hash
+// Returns:  Parsed GitObject model
+// ------------------------------------------------------------------------------
 fn read_git_object(git_dir: string, hash: string) -> GitObject:
     if len(hash) != 40:
-        // Try finding prefix match if partial hash is provided
         found_hash := find_object_by_prefix(git_dir, hash)
         if len(found_hash) == 40:
             hash = found_hash
@@ -95,6 +130,14 @@ fn read_git_object(git_dir: string, hash: string) -> GitObject:
     payload := zlib_decompress(comp)
     return parse_object_payload(payload, hash)
 
+// ------------------------------------------------------------------------------
+// Function: find_object_by_prefix
+// Syntax:   fn find_object_by_prefix(git_dir: string, prefix_str: string) -> string
+// Purpose:  Resolves a short hexadecimal hash prefix to a full 40-character SHA-1.
+// Params:   git_dir    - Path to the .git directory
+//           prefix_str - Short hexadecimal prefix (>= 4 characters)
+// Returns:  Full 40-character SHA-1 or empty string if not found
+// ------------------------------------------------------------------------------
 fn find_object_by_prefix(git_dir: string, prefix_str: string) -> string:
     if len(prefix_str) < 4:
         return ""
@@ -117,6 +160,13 @@ fn find_object_by_prefix(git_dir: string, prefix_str: string) -> string:
         i = i + 1
     return match_hash
 
+// ------------------------------------------------------------------------------
+// Function: serialize_tree
+// Syntax:   fn serialize_tree(entries: vector[TreeEntry]) -> string
+// Purpose:  Encodes tree entries into canonical binary format: "<mode> <name>\0<20-byte-sha1>"
+// Params:   entries - Vector of TreeEntry objects
+// Returns:  Serialized binary tree body
+// ------------------------------------------------------------------------------
 fn serialize_tree(entries: vector[TreeEntry]) -> string:
     res := ""
     i := 0
@@ -127,13 +177,19 @@ fn serialize_tree(entries: vector[TreeEntry]) -> string:
         i = i + 1
     return res
 
+// ------------------------------------------------------------------------------
+// Function: parse_tree_entries
+// Syntax:   fn parse_tree_entries(content: string) -> vector[TreeEntry]
+// Purpose:  Parses raw binary tree content into a vector of TreeEntry records.
+// Params:   content - Uncompressed binary tree payload
+// Returns:  Vector of TreeEntry structures
+// ------------------------------------------------------------------------------
 fn parse_tree_entries(content: string) -> vector[TreeEntry]:
     entries: vector[TreeEntry] = []
     clen := len(content)
     pos := 0
 
     while pos < clen:
-        // Find space
         space_pos := -1
         i := pos
         while i < clen:
@@ -147,7 +203,6 @@ fn parse_tree_entries(content: string) -> vector[TreeEntry]:
 
         mode := substring(content, pos, space_pos - pos)
 
-        // Find null byte
         null_pos := -1
         i = space_pos + 1
         while i < clen:
@@ -161,7 +216,6 @@ fn parse_tree_entries(content: string) -> vector[TreeEntry]:
 
         name := substring(content, space_pos + 1, null_pos - space_pos - 1)
 
-        // 20-byte SHA-1 hash
         raw_sha := ""
         if null_pos + 1 + 20 <= clen:
             raw_sha = substring(content, null_pos + 1, 20)
@@ -174,6 +228,18 @@ fn parse_tree_entries(content: string) -> vector[TreeEntry]:
 
     return entries
 
+// ------------------------------------------------------------------------------
+// Function: serialize_commit
+// Syntax:   fn serialize_commit(tree_hash: string, parent_hash: string, author_name: string, author_email: string, ts: int, msg: string) -> string
+// Purpose:  Constructs a standard Git commit object string with author metadata.
+// Params:   tree_hash    - 40-character root tree SHA-1
+//           parent_hash  - 40-character parent commit SHA-1 (optional)
+//           author_name  - Author full name
+//           author_email - Author email address
+//           ts           - POSIX epoch timestamp in seconds
+//           msg          - Commit message description
+// Returns:  Formatted commit object text
+// ------------------------------------------------------------------------------
 fn serialize_commit(tree_hash: string, parent_hash: string, author_name: string, author_email: string, ts: int, msg: string) -> string:
     out := "tree " + tree_hash + chr(10)
     if len(parent_hash) > 0:
@@ -185,6 +251,13 @@ fn serialize_commit(tree_hash: string, parent_hash: string, author_name: string,
     out = out + msg + chr(10)
     return out
 
+// ------------------------------------------------------------------------------
+// Function: parse_commit_info
+// Syntax:   fn parse_commit_info(content: string) -> CommitInfo
+// Purpose:  Extracts tree pointer, parent pointers, author metadata, and message from a commit.
+// Params:   content - Uncompressed commit object payload
+// Returns:  Structured CommitInfo model
+// ------------------------------------------------------------------------------
 fn parse_commit_info(content: string) -> CommitInfo:
     tree_hash := ""
     parent_hash := ""
@@ -223,7 +296,6 @@ fn parse_commit_info(content: string) -> CommitInfo:
         elif len(line) >= 7 and substring(line, 0, 7) == "parent ":
             parent_hash = substring(line, 7, len(line) - 7)
         elif len(line) >= 7 and substring(line, 0, 7) == "author ":
-            // author Name <email> ts +0000
             auth_str := substring(line, 7, len(line) - 7)
             lt := -1
             gt := -1

@@ -1,7 +1,10 @@
-// ============================================================================
-//  cluster-git: Staging & Index Engine (src/index.cl)
-//  DIRC v2 Binary Index Serialization & Staging Operations
-// ============================================================================
+// ==============================================================================
+// Module:      Staging & Index Engine (index.cl)
+// Project:     Cluster Git (Distributed Version Control System)
+// Author:      Zaid Alamgir (ZK Company)
+// License:     MIT License
+// Description: Git DIRC v2 binary index serialization, parsing, and staging logic.
+// ==============================================================================
 
 model IndexEntry:
     path: string
@@ -9,6 +12,13 @@ model IndexEntry:
     mode: string
     size: int
 
+// ------------------------------------------------------------------------------
+// Function: pack_be32
+// Syntax:   fn pack_be32(val: int) -> string
+// Purpose:  Serializes a 32-bit unsigned integer into 4 big-endian bytes.
+// Params:   val - 32-bit integer value
+// Returns:  4-character binary string
+// ------------------------------------------------------------------------------
 fn pack_be32(val: int) -> string:
     mask := 4294967295
     v := val & mask
@@ -18,12 +28,27 @@ fn pack_be32(val: int) -> string:
     b3 := v & 255
     return chr(b0) + chr(b1) + chr(b2) + chr(b3)
 
+// ------------------------------------------------------------------------------
+// Function: pack_be16
+// Syntax:   fn pack_be16(val: int) -> string
+// Purpose:  Serializes a 16-bit unsigned integer into 2 big-endian bytes.
+// Params:   val - 16-bit integer value
+// Returns:  2-character binary string
+// ------------------------------------------------------------------------------
 fn pack_be16(val: int) -> string:
     v := val & 65535
     b0 := (v >> 8) & 255
     b1 := v & 255
     return chr(b0) + chr(b1)
 
+// ------------------------------------------------------------------------------
+// Function: unpack_be32
+// Syntax:   fn unpack_be32(s: string, offset: int) -> int
+// Purpose:  Unpacks a 32-bit big-endian unsigned integer from a byte offset.
+// Params:   s      - Binary string containing bytes
+//           offset - Starting index of the 4-byte integer
+// Returns:  Decoded 32-bit integer
+// ------------------------------------------------------------------------------
 fn unpack_be32(s: string, offset: int) -> int:
     b0 := byte_at(s, offset)
     b1 := byte_at(s, offset + 1)
@@ -31,30 +56,54 @@ fn unpack_be32(s: string, offset: int) -> int:
     b3 := byte_at(s, offset + 3)
     return ((b0 << 24) | (b1 << 16) | (b2 << 8) | b3) & 4294967295
 
+// ------------------------------------------------------------------------------
+// Function: sort_index_entries
+// Syntax:   fn sort_index_entries(entries: vector[IndexEntry]) -> void
+// Purpose:  Sorts index entries in lexicographical path order as required by Git.
+// Params:   entries - Mutable vector of IndexEntry items
+// ------------------------------------------------------------------------------
+fn sort_index_entries(entries: vector[IndexEntry]) -> void:
+    n := len(entries)
+    i := 0
+    while i < n:
+        j := 0
+        while j < n - 1:
+            if str_compare(entries[j].path, entries[j + 1].path) > 0:
+                temp := entries[j]
+                entries[j] = entries[j + 1]
+                entries[j + 1] = temp
+            j = j + 1
+        i = i + 1
+
+// ------------------------------------------------------------------------------
+// Function: write_index_file
+// Syntax:   fn write_index_file(git_dir: string, entries: vector[IndexEntry]) -> void
+// Purpose:  Encodes and writes canonical DIRC v2 binary index file (.git/index).
+// Params:   git_dir - Path to the .git directory
+//           entries - Staged IndexEntry items to serialize
+// ------------------------------------------------------------------------------
 fn write_index_file(git_dir: string, entries: vector[IndexEntry]) -> void:
-    // Sort entries alphabetically by path for git standard compliance
     sort_index_entries(entries)
 
-    // DIRC header: "DIRC" + version 2 + entry count
+    // DIRC Header: Signature "DIRC" + version 2 + entry count
     buf := "DIRC" + pack_be32(2) + pack_be32(len(entries))
 
     i := 0
     elen := len(entries)
     while i < elen:
         entry := entries[i]
-        // 10 32-bit uints: ctime(sec,nsec), mtime(sec,nsec), dev, ino, mode, uid, gid, size
-        mode_val := 33188 // 0100644 (octal)
+        mode_val := 33188 // 0100644 (regular file)
         if entry.mode == "100755":
-            mode_val = 33261 // 0100755 (octal)
+            mode_val = 33261 // 0100755 (executable)
 
-        entry_buf := pack_be32(0) + pack_be32(0) // ctime
-        entry_buf = entry_buf + pack_be32(0) + pack_be32(0) // mtime
+        entry_buf := pack_be32(0) + pack_be32(0) // ctime(sec, nsec)
+        entry_buf = entry_buf + pack_be32(0) + pack_be32(0) // mtime(sec, nsec)
         entry_buf = entry_buf + pack_be32(0) + pack_be32(0) // dev, ino
         entry_buf = entry_buf + pack_be32(mode_val) // mode
         entry_buf = entry_buf + pack_be32(0) + pack_be32(0) // uid, gid
         entry_buf = entry_buf + pack_be32(entry.size) // file size
 
-        // 20-byte SHA-1 binary hash
+        // 20 raw binary bytes of SHA-1
         entry_buf = entry_buf + hex_to_raw_str(entry.sha1_hex)
 
         // 16-bit flags: path length (max 0xFFF)
@@ -64,10 +113,10 @@ fn write_index_file(git_dir: string, entries: vector[IndexEntry]) -> void:
             flags = 4095
         entry_buf = entry_buf + pack_be16(flags)
 
-        // Path and null byte
+        // Path and null byte terminator
         entry_buf = entry_buf + entry.path + chr(0)
 
-        // Pad with null bytes to 8-byte boundary
+        // Null padding to align entry on an 8-byte boundary
         rem := len(entry_buf) % 8
         if rem != 0:
             pad := 8 - rem
@@ -79,13 +128,20 @@ fn write_index_file(git_dir: string, entries: vector[IndexEntry]) -> void:
         buf = buf + entry_buf
         i = i + 1
 
-    // Append 20-byte SHA-1 checksum of index buffer
+    // Append 20-byte SHA-1 checksum of index payload
     cksum_hex := sha1(buf)
     buf = buf + hex_to_raw_str(cksum_hex)
 
     index_path := git_dir + "/index"
     file_write(index_path, buf)
 
+// ------------------------------------------------------------------------------
+// Function: read_index_file
+// Syntax:   fn read_index_file(git_dir: string) -> vector[IndexEntry]
+// Purpose:  Reads and decodes binary DIRC v2 .git/index file into IndexEntry records.
+// Params:   git_dir - Path to the .git directory
+// Returns:  Vector of parsed IndexEntry items
+// ------------------------------------------------------------------------------
 fn read_index_file(git_dir: string) -> vector[IndexEntry]:
     entries: vector[IndexEntry] = []
     index_path := git_dir + "/index"
@@ -97,7 +153,7 @@ fn read_index_file(git_dir: string) -> vector[IndexEntry]:
     if rlen < 32:
         return entries
 
-    // Verify DIRC header
+    // Validate DIRC signature
     sig := substring(raw, 0, 4)
     if sig != "DIRC":
         return entries
@@ -118,7 +174,6 @@ fn read_index_file(git_dir: string) -> vector[IndexEntry]:
         if mode_val == 33261:
             mode_str = "100755"
 
-        // Path starts at pos + 62
         path_pos := pos + 62
         null_pos := -1
         p := path_pos
@@ -144,19 +199,15 @@ fn read_index_file(git_dir: string) -> vector[IndexEntry]:
 
     return entries
 
-fn sort_index_entries(entries: vector[IndexEntry]) -> void:
-    n := len(entries)
-    i := 0
-    while i < n:
-        j := 0
-        while j < n - 1:
-            if str_compare(entries[j].path, entries[j + 1].path) > 0:
-                temp := entries[j]
-                entries[j] = entries[j + 1]
-                entries[j + 1] = temp
-            j = j + 1
-        i = i + 1
-
+// ------------------------------------------------------------------------------
+// Function: add_file_to_index
+// Syntax:   fn add_file_to_index(git_dir: string, repo_root: string, rel_path: string) -> string
+// Purpose:  Hashes a working file, creates a blob in the object store, and stages it.
+// Params:   git_dir   - Path to .git directory
+//           repo_root - Root directory of the repository
+//           rel_path  - Relative path of file to add
+// Returns:  40-character SHA-1 of the created blob
+// ------------------------------------------------------------------------------
 fn add_file_to_index(git_dir: string, repo_root: string, rel_path: string) -> string:
     full_path := rel_path
     if len(repo_root) > 0 and repo_root != ".":
@@ -186,6 +237,14 @@ fn add_file_to_index(git_dir: string, repo_root: string, rel_path: string) -> st
     write_index_file(git_dir, entries)
     return blob_hash
 
+// ------------------------------------------------------------------------------
+// Function: remove_file_from_index
+// Syntax:   fn remove_file_from_index(git_dir: string, rel_path: string) -> int
+// Purpose:  Unstages a file from the index.
+// Params:   git_dir  - Path to .git directory
+//           rel_path - Relative path of file to remove
+// Returns:  1 if entry was removed, 0 if not found
+// ------------------------------------------------------------------------------
 fn remove_file_from_index(git_dir: string, rel_path: string) -> int:
     entries := read_index_file(git_dir)
     new_entries: vector[IndexEntry] = []

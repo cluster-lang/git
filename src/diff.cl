@@ -1,12 +1,22 @@
-// ============================================================================
-//  cluster-git: Unified Diff Engine (src/diff.cl)
-//  Pure Cluster Line-by-Line LCS Diff Algorithm with ANSI Color Highlights
-// ============================================================================
+// ==============================================================================
+// Module:      Unified Diff Engine (diff.cl)
+// Project:     Cluster Git (Distributed Version Control System)
+// Author:      Zaid Alamgir (ZK Company)
+// License:     MIT License
+// Description: Longest Common Subsequence (LCS) line diff with ANSI color formatting.
+// ==============================================================================
 
 model DiffLine:
     kind: string
     text: string
 
+// ------------------------------------------------------------------------------
+// Function: split_lines
+// Syntax:   fn split_lines(text: string) -> vector[string]
+// Purpose:  Splits text payload into a vector of individual lines without CRLF.
+// Params:   text - Multiline input string
+// Returns:  Vector of individual line strings
+// ------------------------------------------------------------------------------
 fn split_lines(text: string) -> vector[string]:
     lines: vector[string] = []
     cur := ""
@@ -26,6 +36,14 @@ fn split_lines(text: string) -> vector[string]:
 
     return lines
 
+// ------------------------------------------------------------------------------
+// Function: compute_diff
+// Syntax:   fn compute_diff(a_lines: vector[string], b_lines: vector[string]) -> vector[DiffLine]
+// Purpose:  Computes minimal line-by-line edit operations using 2D dynamic programming.
+// Params:   a_lines - Original text lines
+//           b_lines - Modified text lines
+// Returns:  Vector of DiffLine items (' ' context, '-' deletion, '+' addition)
+// ------------------------------------------------------------------------------
 fn compute_diff(a_lines: vector[string], b_lines: vector[string]) -> vector[DiffLine]:
     m := len(a_lines)
     n := len(b_lines)
@@ -49,9 +67,8 @@ fn compute_diff(a_lines: vector[string], b_lines: vector[string]) -> vector[Diff
             i = i + 1
         return diff
 
-    // For very large files, avoid massive matrix allocations
+    // Fast-path for extremely large line buffers to prevent matrix memory spikes
     if (m + 1) * (n + 1) > 2000000:
-        // Simple fast line diff
         lim := m
         if n < lim:
             lim = n
@@ -124,7 +141,7 @@ fn compute_diff(a_lines: vector[string], b_lines: vector[string]) -> vector[Diff
                 rev_diff.push(DiffLine("-", a_lines[ci - 1]))
                 ci = ci - 1
 
-    // Reverse rev_diff into diff
+    // Reverse to chronological order
     rlen := len(rev_diff)
     idx := rlen - 1
     while idx >= 0:
@@ -133,6 +150,16 @@ fn compute_diff(a_lines: vector[string], b_lines: vector[string]) -> vector[Diff
 
     return diff
 
+// ------------------------------------------------------------------------------
+// Function: print_unified_diff
+// Syntax:   fn print_unified_diff(path: string, a_content: string, b_content: string, use_color: int) -> int
+// Purpose:  Prints standard unified diff format with optional ANSI terminal color highlighting.
+// Params:   path      - Relative path of file being compared
+//           a_content - Original staged file content
+//           b_content - Modified working copy file content
+//           use_color - 1 to enable ANSI escape colors, 0 for plain text
+// Returns:  1 if differences existed and were printed, 0 if identical
+// ------------------------------------------------------------------------------
 fn print_unified_diff(path: string, a_content: string, b_content: string, use_color: int) -> int:
     a_lines := split_lines(a_content)
     b_lines := split_lines(b_content)
