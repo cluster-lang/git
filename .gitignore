@@ -1,0 +1,14 @@
+# ==============================================================================
+# Cluster Git Engine: Git Ignore
+# ==============================================================================
+
+# Cache and IDE artifacts
+.cl_cache/
+.vscode/
+
+# Build artifacts and temp
+dist/
+build/
+*.tmp
+*.log
+.DS_Store
