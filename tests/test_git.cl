@@ -8,6 +8,8 @@ import "src/object.cl"
 import "src/index.cl"
 import "src/repository.cl"
 import "src/diff.cl"
+import "src/pktline.cl"
+import "src/pack.cl"
 
 fn assert_true(cond: int, test_name: string) -> void:
     c_green := chr(27) + "[32m"
@@ -17,6 +19,7 @@ fn assert_true(cond: int, test_name: string) -> void:
         println("  " + c_green + "[PASS]" + c_reset + " " + test_name)
     else:
         println("  " + c_red + "[FAIL]" + c_reset + " " + test_name)
+        assert(0)
 
 fn main():
     println("=================================================================")
@@ -83,7 +86,7 @@ fn main():
     // Test 5: Git Tree Objects & Serialization
     // -------------------------------------------------------------
     println("\n--- Phase 5: Git Tree Object Model & Parsing ---")
-    tree_entries: vector[TreeEntry] = []
+    let mut tree_entries: vector[TreeEntry] = []
     tree_entries.push(TreeEntry("100644", "main.cl", blob_hash))
 
     raw_tree := serialize_tree(tree_entries)
@@ -114,7 +117,6 @@ fn main():
     assert_true(cinfo.author_name == "Cluster Team", "Author name matches")
     assert_true(cinfo.message == "Initial commit\n", "Commit message matches")
 
-    // Update branch ref
     update_branch_ref(git_dir, "main", commit_hash)
     cur_head := get_head_commit(git_dir)
     assert_true(cur_head == commit_hash, "HEAD resolves to newest commit")
@@ -142,20 +144,76 @@ fn main():
     new_lines := split_lines(new_code)
     diff_lines := compute_diff(old_lines, new_lines)
 
-    has_add := 0
-    has_del := 0
-    i := 0
+    let mut has_add: int = 0
+    let mut has_del: int = 0
+    let mut i: int = 0
     while i < len(diff_lines):
         if diff_lines[i].kind == "+": has_add = 1
         if diff_lines[i].kind == "-": has_del = 1
         i = i + 1
-
     assert_true(has_add == 1, "Diff detected line additions (+)")
     assert_true(has_del == 1, "Diff detected line deletions (-)")
 
-    // Clean up
+    // -------------------------------------------------------------
+    // Test 9: Git Tagging Engine
+    // -------------------------------------------------------------
+    println("\n--- Phase 9: Git Tagging Engine (create, list, delete) ---")
+    create_tag(git_dir, "v1.0.0", commit_hash)
+    tags := list_tags(git_dir)
+    assert_true(len(tags) == 1, "Tags count is 1")
+    assert_true(tags[0] == "v1.0.0", "Tag name is v1.0.0")
+    assert_true(get_tag_commit(git_dir, "v1.0.0") == commit_hash, "Tag resolves to commit hash")
+
+    delete_tag(git_dir, "v1.0.0")
+    tags_after := list_tags(git_dir)
+    assert_true(len(tags_after) == 0, "Tag successfully deleted")
+
+    // -------------------------------------------------------------
+    // Test 10: Git Remote & Configuration Parsing
+    // -------------------------------------------------------------
+    println("\n--- Phase 10: Git Remote & Configuration Parsing ---")
+    add_remote(git_dir, "origin", "git@github.com:cluster-lang/git.git")
+    rem_url := get_remote_url(git_dir, "origin")
+    assert_true(rem_url == "git@github.com:cluster-lang/git.git", "Remote URL correctly configured")
+
+    // -------------------------------------------------------------
+    // Test 11: Git Reset Reference Operations
+    // -------------------------------------------------------------
+    println("\n--- Phase 11: Git Reset Reference Operations ---")
+    reset_soft(git_dir, commit_hash)
+    assert_true(get_head_commit(git_dir) == commit_hash, "Soft reset retained target commit")
+
+    // -------------------------------------------------------------
+    // Test 12: Git Pkt-Line Wire Framing
+    // -------------------------------------------------------------
+    println("\n--- Phase 12: Git Pkt-Line Wire Framing ---")
+    pkt := format_pkt_line("want 3b18e512dba79e4c8300dd08aeb37f8e728b8dad\n")
+    assert_true(len(pkt) == 50, "Pkt-line formatted with 4-byte length prefix")
+    pkt_len := parse_pkt_length(substring(pkt, 0, 4))
+    assert_true(pkt_len == 50, "Pkt-line length decoded correctly")
+    payload := parse_pkt_payload(pkt)
+    assert_true(payload == "want 3b18e512dba79e4c8300dd08aeb37f8e728b8dad\n", "Pkt-line payload matches")
+    assert_true(format_pkt_flush() == "0000", "Pkt-flush packet is 0000")
+
+    // -------------------------------------------------------------
+    // Test 13: Packfile v2 Generator & Header Verification
+    // -------------------------------------------------------------
+    println("\n--- Phase 13: Packfile v2 Generator & Header Verification ---")
+    let mut pack_objs: vector[GitObject] = []
+    pack_objs.push(read_obj)
+    pack_objs.push(read_tree_obj)
+    pack_objs.push(read_commit)
+
+    pack_data := pack_create(pack_objs)
+    assert_true(len(pack_data) > 32, "Packfile non-empty stream")
+    hdr := pack_verify_header(pack_data)
+    assert_true(hdr.magic == "PACK", "Packfile magic header verified")
+    assert_true(hdr.version == 2, "Packfile version is 2")
+    assert_true(hdr.object_count == 3, "Packfile object count is 3")
+
+    // Clean up temporary test repository
     system("rm -rf " + test_repo)
 
     println("\n=================================================================")
-    println(" ALL 10 PHASES OF CLUSTER-GIT VERIFIED WITH 100% SUCCESS")
+    println(" ALL 13 PHASES OF CLUSTER-GIT VERIFIED WITH 100% SUCCESS")
     println("=================================================================")

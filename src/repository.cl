@@ -3,15 +3,26 @@
 // Project:     Cluster Git (Distributed Version Control System)
 // Author:      zk-mohammad <ZaidKhan-alamgir@proton.me>
 // License:     Cluster Community & Fair-Source License (CCFL v2.0)
-// Description: Repository initialization, HEAD branch resolution, and refs management.
+// Description: Repository initialization, HEAD branch resolution, refs, tags,
+//              remotes, and reset operations adhering to standard Git layout.
 // ==============================================================================
+
+fn trim_string(s: string) -> string:
+    sz := len(s)
+    let mut start: int = 0
+    while start < sz and (byte_at(s, start) == 32 or byte_at(s, start) == 9 or byte_at(s, start) == 10 or byte_at(s, start) == 13):
+        start = start + 1
+    let mut end: int = sz - 1
+    while end >= start and (byte_at(s, end) == 32 or byte_at(s, end) == 9 or byte_at(s, end) == 10 or byte_at(s, end) == 13):
+        end = end - 1
+    if start > end:
+        return ""
+    return substring(s, start, end - start + 1)
 
 // ------------------------------------------------------------------------------
 // Function: find_git_dir
 // Syntax:   fn find_git_dir(start_path: string) -> string
 // Purpose:  Traverses directory hierarchy upward to locate enclosing .git folder.
-// Params:   start_path - Working path to begin directory discovery
-// Returns:  Path to .git directory or empty string if not inside a repository
 // ------------------------------------------------------------------------------
 fn find_git_dir(start_path: string) -> string:
     cur := start_path
@@ -34,8 +45,6 @@ fn find_git_dir(start_path: string) -> string:
 // Function: init_repository
 // Syntax:   fn init_repository(target_path: string) -> int
 // Purpose:  Initializes standard Git repository directory layout, HEAD, and config.
-// Params:   target_path - Destination repository root directory
-// Returns:  1 if newly initialized, 0 if already existed
 // ------------------------------------------------------------------------------
 fn init_repository(target_path: string) -> int:
     root := target_path
@@ -62,11 +71,7 @@ fn init_repository(target_path: string) -> int:
     return 1
 
 // ------------------------------------------------------------------------------
-// Function: get_head_branch
-// Syntax:   fn get_head_branch(git_dir: string) -> string
-// Purpose:  Resolves .git/HEAD to active branch name ("main", "master") or detached hash.
-// Params:   git_dir - Path to .git directory
-// Returns:  Branch name or 40-character commit hash
+// Branch and HEAD Resolution
 // ------------------------------------------------------------------------------
 fn get_head_branch(git_dir: string) -> string:
     head_file := git_dir + "/HEAD"
@@ -88,13 +93,6 @@ fn get_head_branch(git_dir: string) -> string:
 
     return clean
 
-// ------------------------------------------------------------------------------
-// Function: get_head_commit
-// Syntax:   fn get_head_commit(git_dir: string) -> string
-// Purpose:  Retrieves the current 40-character commit hash pointed to by HEAD.
-// Params:   git_dir - Path to .git directory
-// Returns:  40-character commit hash or empty string if unborn repository
-// ------------------------------------------------------------------------------
 fn get_head_commit(git_dir: string) -> string:
     branch := get_head_branch(git_dir)
     ref_file := git_dir + "/refs/heads/" + branch
@@ -114,14 +112,6 @@ fn get_head_commit(git_dir: string) -> string:
 
     return ""
 
-// ------------------------------------------------------------------------------
-// Function: update_branch_ref
-// Syntax:   fn update_branch_ref(git_dir: string, branch: string, commit_hash: string) -> void
-// Purpose:  Updates a branch pointer under .git/refs/heads/<branch> to a new commit.
-// Params:   git_dir     - Path to .git directory
-//           branch      - Name of branch to update
-//           commit_hash - 40-character commit hash
-// ------------------------------------------------------------------------------
 fn update_branch_ref(git_dir: string, branch: string, commit_hash: string) -> void:
     ref_dir := git_dir + "/refs/heads"
     if file_exists(ref_dir) == 0:
@@ -129,13 +119,6 @@ fn update_branch_ref(git_dir: string, branch: string, commit_hash: string) -> vo
     ref_file := ref_dir + "/" + branch
     file_write(ref_file, commit_hash + chr(10))
 
-// ------------------------------------------------------------------------------
-// Function: list_branches
-// Syntax:   fn list_branches(git_dir: string) -> vector[string]
-// Purpose:  Scans .git/refs/heads/ and returns list of all local branch names.
-// Params:   git_dir - Path to .git directory
-// Returns:  Vector of branch name strings
-// ------------------------------------------------------------------------------
 fn list_branches(git_dir: string) -> vector[string]:
     branches: vector[string] = []
     ref_dir := git_dir + "/refs/heads"
@@ -152,29 +135,120 @@ fn list_branches(git_dir: string) -> vector[string]:
         i = i + 1
     return branches
 
-// ------------------------------------------------------------------------------
-// Function: create_branch
-// Syntax:   fn create_branch(git_dir: string, branch_name: string, commit_hash: string) -> int
-// Purpose:  Creates a new branch reference pointing to the specified commit.
-// Params:   git_dir     - Path to .git directory
-//           branch_name - Name of new branch
-//           commit_hash - 40-character target commit hash
-// Returns:  1 on success, 0 on invalid commit hash
-// ------------------------------------------------------------------------------
 fn create_branch(git_dir: string, branch_name: string, commit_hash: string) -> int:
     if len(commit_hash) == 0:
         return 0
     update_branch_ref(git_dir, branch_name, commit_hash)
     return 1
 
-// ------------------------------------------------------------------------------
-// Function: set_head_branch
-// Syntax:   fn set_head_branch(git_dir: string, branch_name: string) -> void
-// Purpose:  Switches .git/HEAD to point to a different symbolic branch reference.
-// Params:   git_dir     - Path to .git directory
-//           branch_name - Target branch to switch active HEAD to
-// ------------------------------------------------------------------------------
 fn set_head_branch(git_dir: string, branch_name: string) -> void:
     head_file := git_dir + "/HEAD"
     content := "ref: refs/heads/" + branch_name + chr(10)
     file_write(head_file, content)
+
+// ------------------------------------------------------------------------------
+// Tag Management (git tag)
+// ------------------------------------------------------------------------------
+fn create_tag(git_dir: string, tag_name: string, target_commit: string) -> int:
+    if len(target_commit) == 0:
+        return 0
+    tag_dir := git_dir + "/refs/tags"
+    if file_exists(tag_dir) == 0:
+        system("mkdir -p " + tag_dir)
+    file_write(tag_dir + "/" + tag_name, target_commit + chr(10))
+    return 1
+
+fn get_tag_commit(git_dir: string, tag_name: string) -> string:
+    tag_file := git_dir + "/refs/tags/" + tag_name
+    if file_exists(tag_file) == 0:
+        return ""
+    raw := file_read(tag_file)
+    let mut clean: string = ""
+    let mut i: int = 0
+    while i < len(raw):
+        b := byte_at(raw, i)
+        if b != 10 and b != 13 and b != 32:
+            clean = clean + chr(b)
+        i = i + 1
+    return clean
+
+fn list_tags(git_dir: string) -> vector[string]:
+    tags: vector[string] = []
+    tag_dir := git_dir + "/refs/tags"
+    if file_exists(tag_dir) == 0:
+        return tags
+
+    files := fs_list_dir(tag_dir)
+    let mut i: int = 0
+    while i < len(files):
+        f := files[i]
+        if f != "." and f != "..":
+            tags.push(f)
+        i = i + 1
+    return tags
+
+fn delete_tag(git_dir: string, tag_name: string) -> int:
+    tag_file := git_dir + "/refs/tags/" + tag_name
+    if file_exists(tag_file) == 1:
+        system("rm -f " + tag_file)
+        return 1
+    return 0
+
+// ------------------------------------------------------------------------------
+// Remotes and Config (git remote)
+// ------------------------------------------------------------------------------
+fn add_remote(git_dir: string, remote_name: string, remote_url: string) -> int:
+    config_file := git_dir + "/config"
+    entry := "[remote \"" + remote_name + "\"]" + chr(10) + "\turl = " + remote_url + chr(10) + "\tfetch = +refs/heads/*:refs/remotes/" + remote_name + "/*" + chr(10)
+    let mut cur: string = ""
+    if file_exists(config_file) == 1:
+        cur = file_read(config_file)
+    file_write(config_file, cur + entry)
+    return 1
+
+fn get_remote_url(git_dir: string, remote_name: string) -> string:
+    config_file := git_dir + "/config"
+    if file_exists(config_file) == 0:
+        return ""
+    content := file_read(config_file)
+    target_sec := "[remote \"" + remote_name + "\"]"
+    if string_contains(content, target_sec) == 0:
+        return ""
+    
+    // Find section start
+    sz := len(content)
+    let mut i: int = 0
+    while i < sz:
+        if substring(content, i, len(target_sec)) == target_sec:
+            break
+        i = i + 1
+    
+    // Read lines until next section or EOF
+    let mut url_line: string = ""
+    let mut cur: string = ""
+    let mut j: int = i + len(target_sec)
+    while j < sz:
+        b := byte_at(content, j)
+        if b == 10:
+            if string_contains(cur, "url = ") == 1:
+                url_line = cur
+                break
+            cur = ""
+        else:
+            cur = cur + chr(b)
+        j = j + 1
+
+    if len(url_line) > 0:
+        pos := 0
+        while pos + 6 <= len(url_line):
+            if substring(url_line, pos, 6) == "url = ":
+                return substring(url_line, pos + 6, len(url_line) - pos - 6)
+            pos = pos + 1
+    return ""
+
+// ------------------------------------------------------------------------------
+// Reset Engine (git reset)
+// ------------------------------------------------------------------------------
+fn reset_soft(git_dir: string, target_commit: string) -> void:
+    branch := get_head_branch(git_dir)
+    update_branch_ref(git_dir, branch, target_commit)

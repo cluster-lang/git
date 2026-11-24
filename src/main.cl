@@ -3,7 +3,8 @@
 // Project:     Cluster Git (Distributed Version Control System)
 // Author:      zk-mohammad <ZaidKhan-alamgir@proton.me>
 // License:     Cluster Community & Fair-Source License (CCFL v2.0)
-// Description: Porcelain command router (init, status, add, commit, log, diff, branch, checkout).
+// Description: Porcelain command router (init, status, add, commit, log, diff, branch,
+//              checkout, tag, reset, remote, show, rev-parse, cat-file, hash-object, write-tree).
 // ==============================================================================
 
 import "src/sha1.cl"
@@ -12,6 +13,8 @@ import "src/object.cl"
 import "src/index.cl"
 import "src/repository.cl"
 import "src/diff.cl"
+import "src/pktline.cl"
+import "src/pack.cl"
 
 // ------------------------------------------------------------------------------
 // Function: sort_tree_entries
@@ -35,10 +38,6 @@ fn sort_tree_entries(entries: vector[TreeEntry]) -> void:
 // Function: build_tree_recursive
 // Syntax:   fn build_tree_recursive(git_dir: string, entries: vector[IndexEntry], prefix: string) -> string
 // Purpose:  Recursively constructs tree and sub-tree objects from staged index entries.
-// Params:   git_dir - Path to .git directory
-//           entries - Staged index entries
-//           prefix  - Current subdirectory prefix (e.g. "src/")
-// Returns:  40-character SHA-1 of the generated tree object
 // ------------------------------------------------------------------------------
 fn build_tree_recursive(git_dir: string, entries: vector[IndexEntry], prefix: string) -> string:
     tree_entries: vector[TreeEntry] = []
@@ -123,10 +122,9 @@ fn collect_working_files(dir_path: string, rel_prefix: string) -> vector[string]
     return out
 
 // ------------------------------------------------------------------------------
-// Function: cmd_init
-// Syntax:   fn cmd_init(args: vector[string]) -> void
-// Purpose:  Implements 'git init' command.
+// Porcelain Commands
 // ------------------------------------------------------------------------------
+
 fn cmd_init(args: vector[string]) -> void:
     target := "."
     if len(args) > 1:
@@ -138,11 +136,6 @@ fn cmd_init(args: vector[string]) -> void:
     else:
         println("Reinitialized existing Git repository in " + target + "/.git/")
 
-// ------------------------------------------------------------------------------
-// Function: cmd_status
-// Syntax:   fn cmd_status(git_dir: string, repo_root: string) -> void
-// Purpose:  Implements 'git status' displaying branch, staged, modified, and untracked files.
-// ------------------------------------------------------------------------------
 fn cmd_status(git_dir: string, repo_root: string) -> void:
     branch := get_head_branch(git_dir)
     println("On branch " + branch)
@@ -157,7 +150,6 @@ fn cmd_status(git_dir: string, repo_root: string) -> void:
     c_red := chr(27) + "[31m"
     c_reset := chr(27) + "[0m"
 
-    // Changes staged for commit
     if len(index_entries) > 0 and len(head_commit) == 0:
         println("Changes to be committed:")
         println("  (use \"cluster-git rm --cached <file>...\" to unstage)\n")
@@ -216,11 +208,6 @@ fn cmd_status(git_dir: string, repo_root: string) -> void:
     if len(index_entries) == 0 and len(modified_files) == 0 and len(untracked_files) == 0:
         println("nothing to commit, working tree clean")
 
-// ------------------------------------------------------------------------------
-// Function: cmd_add
-// Syntax:   fn cmd_add(git_dir: string, repo_root: string, args: vector[string]) -> void
-// Purpose:  Implements 'git add' staging target files or all files ('.').
-// ------------------------------------------------------------------------------
 fn cmd_add(git_dir: string, repo_root: string, args: vector[string]) -> void:
     if len(args) < 2:
         println("Nothing specified, nothing added.")
@@ -247,11 +234,6 @@ fn cmd_add(git_dir: string, repo_root: string, args: vector[string]) -> void:
                 add_file_to_index(git_dir, repo_root, target)
         i = i + 1
 
-// ------------------------------------------------------------------------------
-// Function: cmd_commit
-// Syntax:   fn cmd_commit(git_dir: string, repo_root: string, args: vector[string]) -> void
-// Purpose:  Implements 'git commit -m' creating tree, commit object, and updating branch ref.
-// ------------------------------------------------------------------------------
 fn cmd_commit(git_dir: string, repo_root: string, args: vector[string]) -> void:
     msg := ""
     i := 1
@@ -273,8 +255,8 @@ fn cmd_commit(git_dir: string, repo_root: string, args: vector[string]) -> void:
     tree_hash := build_tree_recursive(git_dir, index_entries, "")
     parent_hash := get_head_commit(git_dir)
 
-    author_name := "Zaid Alamgir"
-    author_email := "zaid@cluster-lang.org"
+    author_name := "zk-mohammad"
+    author_email := "ZaidKhan-alamgir@proton.me"
     ts := 1731700000
 
     commit_payload := serialize_commit(tree_hash, parent_hash, author_name, author_email, ts, msg)
@@ -291,11 +273,6 @@ fn cmd_commit(git_dir: string, repo_root: string, args: vector[string]) -> void:
     println("[" + branch + is_root + " " + short_hash + "] " + msg)
     println(" " + len(index_entries) + " file(s) changed")
 
-// ------------------------------------------------------------------------------
-// Function: cmd_log
-// Syntax:   fn cmd_log(git_dir: string, args: vector[string]) -> void
-// Purpose:  Implements 'git log' traversing commit DAG parent links.
-// ------------------------------------------------------------------------------
 fn cmd_log(git_dir: string, args: vector[string]) -> void:
     cur_hash := get_head_commit(git_dir)
     if len(cur_hash) == 0:
@@ -336,11 +313,6 @@ fn cmd_log(git_dir: string, args: vector[string]) -> void:
         cur_hash = info.parent_hash
         count = count + 1
 
-// ------------------------------------------------------------------------------
-// Function: cmd_cat_file
-// Syntax:   fn cmd_cat_file(git_dir: string, args: vector[string]) -> void
-// Purpose:  Implements 'git cat-file (-p | -t | -s) <hash>' pretty-printer.
-// ------------------------------------------------------------------------------
 fn cmd_cat_file(git_dir: string, args: vector[string]) -> void:
     if len(args) < 3:
         println("usage: cluster-git cat-file (-p | -t | -s) <object>")
@@ -374,11 +346,6 @@ fn cmd_cat_file(git_dir: string, args: vector[string]) -> void:
             if len(obj.content) > 0 and byte_at(obj.content, len(obj.content) - 1) != 10:
                 println("")
 
-// ------------------------------------------------------------------------------
-// Function: cmd_hash_object
-// Syntax:   fn cmd_hash_object(git_dir: string, args: vector[string]) -> void
-// Purpose:  Implements 'git hash-object [-w] <file>' computing blob SHA-1.
-// ------------------------------------------------------------------------------
 fn cmd_hash_object(git_dir: string, args: vector[string]) -> void:
     write_obj := 0
     file_path := ""
@@ -402,11 +369,6 @@ fn cmd_hash_object(git_dir: string, args: vector[string]) -> void:
         payload := format_object_payload("blob", content)
         println(sha1(payload))
 
-// ------------------------------------------------------------------------------
-// Function: cmd_write_tree
-// Syntax:   fn cmd_write_tree(git_dir: string) -> void
-// Purpose:  Implements 'git write-tree' creating root tree from staging index.
-// ------------------------------------------------------------------------------
 fn cmd_write_tree(git_dir: string) -> void:
     index_entries := read_index_file(git_dir)
     if len(index_entries) == 0:
@@ -415,11 +377,6 @@ fn cmd_write_tree(git_dir: string) -> void:
     tree_hash := build_tree_recursive(git_dir, index_entries, "")
     println(tree_hash)
 
-// ------------------------------------------------------------------------------
-// Function: cmd_branch
-// Syntax:   fn cmd_branch(git_dir: string, args: vector[string]) -> void
-// Purpose:  Implements 'git branch [<name>]' listing or creating branches.
-// ------------------------------------------------------------------------------
 fn cmd_branch(git_dir: string, args: vector[string]) -> void:
     if len(args) <= 1:
         branches := list_branches(git_dir)
@@ -443,11 +400,6 @@ fn cmd_branch(git_dir: string, args: vector[string]) -> void:
         create_branch(git_dir, new_branch, head_commit)
         println("Created branch " + new_branch)
 
-// ------------------------------------------------------------------------------
-// Function: cmd_checkout
-// Syntax:   fn cmd_checkout(git_dir: string, repo_root: string, args: vector[string]) -> void
-// Purpose:  Implements 'git checkout <branch>' switching active branch.
-// ------------------------------------------------------------------------------
 fn cmd_checkout(git_dir: string, repo_root: string, args: vector[string]) -> void:
     if len(args) < 2:
         println("usage: cluster-git checkout <branch>")
@@ -462,11 +414,6 @@ fn cmd_checkout(git_dir: string, repo_root: string, args: vector[string]) -> voi
     set_head_branch(git_dir, branch)
     println("Switched to branch '" + branch + "'")
 
-// ------------------------------------------------------------------------------
-// Function: cmd_diff
-// Syntax:   fn cmd_diff(git_dir: string, repo_root: string) -> void
-// Purpose:  Implements 'git diff' between working files and staged index.
-// ------------------------------------------------------------------------------
 fn cmd_diff(git_dir: string, repo_root: string) -> void:
     index_entries := read_index_file(git_dir)
     i := 0
@@ -479,6 +426,80 @@ fn cmd_diff(git_dir: string, repo_root: string) -> void:
             if blob_obj.content != work_content:
                 print_unified_diff(ie.path, blob_obj.content, work_content, 1)
         i = i + 1
+
+fn cmd_tag(git_dir: string, args: vector[string]) -> void:
+    if len(args) <= 1:
+        tags := list_tags(git_dir)
+        let mut i: int = 0
+        while i < len(tags):
+            println(tags[i])
+            i = i + 1
+        return
+
+    if args[1] == "-d" and len(args) >= 3:
+        tname := args[2]
+        delete_tag(git_dir, tname)
+        println("Deleted tag '" + tname + "'")
+        return
+
+    tag_name := args[1]
+    target_commit := get_head_commit(git_dir)
+    if len(args) >= 3:
+        target_commit = args[2]
+    create_tag(git_dir, tag_name, target_commit)
+    println("Created tag " + tag_name)
+
+fn cmd_reset(git_dir: string, repo_root: string, args: vector[string]) -> void:
+    let mut target_commit: string = ""
+    if len(args) > 1:
+        target_commit = args[1]
+    else:
+        target_commit = get_head_commit(git_dir)
+
+    reset_soft(git_dir, target_commit)
+    println("HEAD is now at " + substring(target_commit, 0, 7))
+
+fn cmd_remote(git_dir: string, args: vector[string]) -> void:
+    if len(args) <= 1:
+        println("origin")
+        return
+    if args[1] == "-v":
+        url := get_remote_url(git_dir, "origin")
+        if len(url) > 0:
+            println("origin\t" + url + " (fetch)")
+            println("origin\t" + url + " (push)")
+        else:
+            println("origin")
+        return
+    if args[1] == "add" and len(args) >= 4:
+        add_remote(git_dir, args[2], args[3])
+        println("Added remote " + args[2])
+        return
+
+fn cmd_rev_parse(git_dir: string, args: vector[string]) -> void:
+    if len(args) < 2:
+        return
+    ref_name := args[1]
+    if ref_name == "HEAD":
+        println(get_head_commit(git_dir))
+    else:
+        b_ref := git_dir + "/refs/heads/" + ref_name
+        if file_exists(b_ref) == 1:
+            raw := file_read(b_ref)
+            println(trim_string(raw))
+        else:
+            println(ref_name)
+
+fn cmd_show(git_dir: string, args: vector[string]) -> void:
+    target := "HEAD"
+    if len(args) > 1:
+        target = args[1]
+    commit_hash := get_head_commit(git_dir)
+    obj := read_git_object(git_dir, commit_hash)
+    println("commit " + commit_hash)
+    info := parse_commit_info(obj.content)
+    println("Author: " + info.author_name + " <" + info.author_email + ">")
+    println("\n    " + info.message)
 
 fn print_help():
     println("Cluster Git: Distributed Version Control System")
@@ -493,6 +514,11 @@ fn print_help():
     println("   diff           Show changes between commits, commit and working tree")
     println("   branch         List or create branches")
     println("   checkout       Switch branches")
+    println("   tag            Create, list, or delete tags")
+    println("   reset          Reset current HEAD to the specified state")
+    println("   remote         Manage set of tracked repositories")
+    println("   rev-parse      Pick out and massage parameters")
+    println("   show           Show various types of objects")
     println("   hash-object    Compute object ID and optionally create a blob")
     println("   cat-file       Provide content or type/size for repository objects")
     println("   write-tree     Create a tree object from the current index")
@@ -541,6 +567,16 @@ fn main():
         cmd_branch(git_dir, args)
     elif subcmd == "checkout":
         cmd_checkout(git_dir, repo_root, args)
+    elif subcmd == "tag":
+        cmd_tag(git_dir, args)
+    elif subcmd == "reset":
+        cmd_reset(git_dir, repo_root, args)
+    elif subcmd == "remote":
+        cmd_remote(git_dir, args)
+    elif subcmd == "rev-parse":
+        cmd_rev_parse(git_dir, args)
+    elif subcmd == "show":
+        cmd_show(git_dir, args)
     elif subcmd == "cat-file":
         cmd_cat_file(git_dir, args)
     elif subcmd == "hash-object":
