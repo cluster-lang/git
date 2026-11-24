@@ -1,0 +1,12 @@
+[package]
+name = "cluster-git"
+version = "1.0.0"
+authors = ["zk-mohammad <ZaidKhan-alamgir@proton.me>"]
+edition = "2026"
+license = "CCFL-2.0"
+description = "Pure native distributed version control system matching Git wire and object storage specifications."
+
+[build]
+entry = "src/main.cl"
+optimization = "O3"
+target = "native"

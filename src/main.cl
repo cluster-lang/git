@@ -1,8 +1,8 @@
 // ==============================================================================
 // Module:      Main CLI Porcelain & Plumbing Driver (main.cl)
 // Project:     Cluster Git (Distributed Version Control System)
-// Author:      mohammadzaid/(cluster) <zkalamgir@proton.me>
-// License:     Cluster Community // License:     MIT License Fair-Source License (CCFL-1.0)
+// Author:      zk-mohammad <ZaidKhan-alamgir@proton.me>
+// License:     Cluster Community & Fair-Source License (CCFL v2.0)
 // Description: Porcelain command router (init, status, add, commit, log, diff, branch, checkout).
 // ==============================================================================
 
@@ -95,26 +95,32 @@ fn build_tree_recursive(git_dir: string, entries: vector[IndexEntry], prefix: st
 
 // ------------------------------------------------------------------------------
 // Function: collect_working_files
-// Syntax:   fn collect_working_files(dir_path: string, rel_prefix: string, &out: vector[string]) -> void
+// Syntax:   fn collect_working_files(dir_path: string, rel_prefix: string) -> vector[string]
 // Purpose:  Recursively scans working directory ignoring .git to find all tracked/untracked files.
 // ------------------------------------------------------------------------------
-fn collect_working_files(dir_path: string, rel_prefix: string, &out: vector[string]) -> void:
+fn collect_working_files(dir_path: string, rel_prefix: string) -> vector[string]:
+    let mut out: vector[string] = []
     files := fs_list_dir(dir_path)
-    i := 0
-    flen := len(files)
+    let mut i: int = 0
+    let flen: int = len(files)
     while i < flen:
         f := files[i]
         if f != ".git" and f != "." and f != "..":
             sub_path := dir_path + "/" + f
-            rel_name := f
+            let mut rel_name: string = f
             if len(rel_prefix) > 0:
                 rel_name = rel_prefix + "/" + f
 
             if fs_is_dir(sub_path) == 1:
-                collect_working_files(sub_path, rel_name, out)
+                sub_res := collect_working_files(sub_path, rel_name)
+                let mut j: int = 0
+                while j < len(sub_res):
+                    out.push(sub_res[j])
+                    j = j + 1
             else:
                 out.push(rel_name)
         i = i + 1
+    return out
 
 // ------------------------------------------------------------------------------
 // Function: cmd_init
@@ -161,8 +167,7 @@ fn cmd_status(git_dir: string, repo_root: string) -> void:
             i = i + 1
         println("")
 
-    working_files: vector[string] = []
-    collect_working_files(repo_root, "", working_files)
+    working_files := collect_working_files(repo_root, "")
 
     modified_files: vector[string] = []
     untracked_files: vector[string] = []
@@ -226,16 +231,14 @@ fn cmd_add(git_dir: string, repo_root: string, args: vector[string]) -> void:
     while i < alen:
         target := args[i]
         if target == "." or target == "*":
-            working_files: vector[string] = []
-            collect_working_files(repo_root, "", working_files)
+            working_files := collect_working_files(repo_root, "")
             j := 0
             while j < len(working_files):
                 add_file_to_index(git_dir, repo_root, working_files[j])
                 j = j + 1
         else:
             if fs_is_dir(target) == 1:
-                dir_files: vector[string] = []
-                collect_working_files(target, target, dir_files)
+                dir_files := collect_working_files(target, target)
                 j := 0
                 while j < len(dir_files):
                     add_file_to_index(git_dir, repo_root, dir_files[j])
@@ -479,7 +482,7 @@ fn cmd_diff(git_dir: string, repo_root: string) -> void:
 
 fn print_help():
     println("Cluster Git: Distributed Version Control System")
-    println("Author: mohammadzaid/(cluster) <zkalamgir@proton.me>")
+    println("Author: zk-mohammad <ZaidKhan-alamgir@proton.me>")
     println("Usage: cluster-git <command> [<args>]\n")
     println("Core Commands:")
     println("   init           Initialize a new Git repository")
@@ -508,7 +511,7 @@ fn main():
 
     if subcmd == "-v" or subcmd == "--version" or subcmd == "version":
         println("cluster-git version 1.0.0 (Cluster native LLVM -O3)")
-        println("Author: mohammadzaid/(cluster) <zkalamgir@proton.me>")
+        println("Author: zk-mohammad <ZaidKhan-alamgir@proton.me>")
         return
 
     if subcmd == "init":
